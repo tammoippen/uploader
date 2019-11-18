@@ -7,8 +7,6 @@ docker:
 			-e UPLDR_ADMIN_SECRET \
 			-e UPLDR_LOCAL_PATH \
 			-e UPLDR_GCS_PATH \
-			-e LOGURU_LEVEL=INFO \
-			-e LOGURU_DIAGNOSE=False \
 			-v $PWD:/app \
 			uploader:latest --reload
 

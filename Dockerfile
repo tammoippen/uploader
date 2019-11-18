@@ -3,7 +3,9 @@ FROM python:3.7-slim
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    VIRTUAL_ENV=/venv
+    VIRTUAL_ENV=/venv \
+    LOGURU_LEVEL=INFO \
+	LOGURU_DIAGNOSE=False
 
 RUN apt-get update && apt-get install -y \
     curl \
