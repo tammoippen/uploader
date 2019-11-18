@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %} Generated Token {% endblock %}
+{% block head %}
+    {{ super() }}
+{% endblock %}
+{% block body %}
+
+<section class="section">
+    <div class="container">
+        <h1 class="title">Generated Token</h1>
+        <code>{{ token }}</code>
+    </div>
+  </section>
+
+{% endblock %}

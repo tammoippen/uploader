@@ -1,0 +1,6 @@
+.git/
+.venv/
+.vscode/
+*.egg-info/
+poetry.lock
+data/
