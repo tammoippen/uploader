@@ -8,8 +8,28 @@
 <section class="section">
     <div class="container">
         <h1 class="title">Generated Token</h1>
-        <code>{{ token }}</code>
+        <pre id="token">{{ token }}</pre>
+        <div class="control has-text-right">
+            <button onclick="copyFunction()" class="button is-link">Copy token</button>
+            <button onclick="goToUpload()" class="button is-link">Got to uploading...</button>
+        </div>
     </div>
-  </section>
+</section>
+
+<script>
+    function goToUpload() {
+        window.location = `/upload?token={{ token }}`;
+    }
+
+    function copyFunction() {
+        const copyText = document.getElementById("token").textContent;
+        const textArea = document.createElement("textarea");
+        textArea.textContent = copyText;
+        document.body.append(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        textArea.remove();
+    }
+</script>
 
 {% endblock %}
