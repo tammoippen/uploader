@@ -31,7 +31,7 @@ try:
         return _POOL
 
     def read(upload_file, size):
-        data = asyncio.get_event_loop().run_until_complete(upload_file.read(size))
+        data = asyncio.run(upload_file.read(size))
         return data
 
     class GCSFile:
