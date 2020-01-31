@@ -26,7 +26,6 @@ python = "^3.7"
 
 fastapi = "^0.42.0"
 uvicorn = "^0.10.8"
-ujson = "^1.35"
 python-multipart = "^0.0.5"
 jinja2 = "^2.10"
 aiofiles = "^0.4.0"
