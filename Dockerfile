@@ -5,7 +5,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     VIRTUAL_ENV=/venv \
     LOGURU_LEVEL=INFO \
-	LOGURU_DIAGNOSE=False
+    LOGURU_DIAGNOSE=False
 
 RUN apt-get update && apt-get install -y \
     curl \
@@ -32,6 +32,4 @@ RUN apt-get update && apt-get install -y \
 COPY . .
 RUN poetry install -E gcs -n --no-dev
 
-EXPOSE 80
-
-ENTRYPOINT [ "uvicorn", "uploader:app", "--host", "0.0.0.0", "--port", "80" ]
+ENTRYPOINT uvicorn uploader:app --host 0.0.0.0 --port ${PORT:-80}

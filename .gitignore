@@ -4,3 +4,7 @@
 poetry.lock
 data/
 .DS_Store
+*.pyc
+*.pyo
+*.pyd
+__pycache__

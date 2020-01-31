@@ -7,8 +7,12 @@ docker:
 			-e UPLDR_ADMIN_SECRET \
 			-e UPLDR_LOCAL_PATH \
 			-e UPLDR_GCS_PATH \
-			-v $PWD:/app \
-			uploader:latest --reload
+			-v ${PWD}:/app \
+			-e PORT=8000 \
+			tammoippen/uploader:latest --reload
+
+build:
+	docker build -t tammoippen/uploader:latest .
 
 format:
 	black .

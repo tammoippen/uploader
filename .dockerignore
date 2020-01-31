@@ -1,6 +1,13 @@
+__pycache__
+.DS_Store
 .git/
 .venv/
 .vscode/
 *.egg-info/
-poetry.lock
+*.pyc
+*.pyd
+*.pyo
 data/
+imgs/
+poetry.lock
+.env
