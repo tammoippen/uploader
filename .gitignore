@@ -3,3 +3,4 @@
 *.egg-info/
 poetry.lock
 data/
+.DS_Store
