@@ -11,7 +11,6 @@ docker:
 			-e UPLDR_LOCAL_PATH \
 			-e UPLDR_GCS_PATH \
 			-v ${PWD}:/app \
-			-e PORT=8000 \
 			tammoippen/uploader:latest --reload
 
 build:
