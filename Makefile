@@ -1,4 +1,7 @@
 dev:
+	UPLDR_JWT_SECRET=1234567890 \
+	UPLDR_ADMIN_SECRET=secret \
+	UPLDR_LOCAL_PATH=out \
 	poetry run uvicorn uploader:app --reload
 
 docker:

@@ -14,17 +14,22 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import secrets
 from typing import Optional
 
-from pydantic import BaseSettings, constr, SecretStr
+from pydantic import BaseSettings, ConstrainedStr, SecretStr
+
+
+class GCSPath(ConstrainedStr):
+    regex = r"gs://[^/]+/.*"
 
 
 class Settings(BaseSettings):
-    jwt_secret: SecretStr
+    jwt_secret: SecretStr = SecretStr(secrets.token_urlsafe(16))
     admin_secret: SecretStr
     local_path: Optional[str] = None
-    gcs_path: Optional[constr(regex=r"gs://[^/]+/.*")] = None
+    gcs_path: Optional[GCSPath] = None
 
     class Config:
-        case_sensitive = True
+        case_sensitive = False
         env_prefix = "UPLDR_"
