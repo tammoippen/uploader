@@ -16,6 +16,7 @@
 
 import os
 from pathlib import Path
+import secrets
 from time import sleep, time
 
 import aiofiles
@@ -55,16 +56,15 @@ async def post_token(
     duration: int = Form(...),
     folder: str = Form(...),
 ):
-    if password == settings.admin_secret.get_secret_value():
+    if secrets.compare_digest(password, settings.admin_secret.get_secret_value()):
         token = jwt.encode(
             {"exp": round(time()) + duration, "folder": folder},
             settings.jwt_secret.get_secret_value(),
             algorithm="HS256",
-        ).decode()
+        )
         return templates.TemplateResponse(
             "token.html", {"request": request, "token": token}
         )
-    sleep(0.5)
     raise HTTPException(status_code=401)
 
 
@@ -101,7 +101,7 @@ async def save_file(upload_file: UploadFile, folder: str) -> None:
         await upload_gcs(upload_file, folder, settings)
     elif settings.local_path:
         dest = Path(settings.local_path) / folder
-        dest.mkdir(exist_ok=True)
+        dest.mkdir(parents=True, exist_ok=True)
         async with aiofiles.open(dest / upload_file.filename, "wb") as f:
             while True:
                 data = await upload_file.read(10 * 2 ** 20)
