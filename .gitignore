@@ -8,3 +8,4 @@ data/
 *.pyo
 *.pyd
 __pycache__
+out/
