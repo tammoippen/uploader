@@ -20,9 +20,10 @@ import secrets
 from time import sleep, time
 
 import aiofiles
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
 import jwt
 from loguru import logger
+from pydantic.types import UUID4
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 from starlette.staticfiles import StaticFiles
@@ -76,7 +77,16 @@ async def get_upload(request: Request, token: str):
 
 
 @app.post("/upload")
-async def post_upload(*, file: UploadFile = File(...), token: str = Form(...)):
+async def post_upload(*,
+    file: UploadFile = File(...),
+    token: str = Form(...),
+    dzuuid: UUID4 = Form(...),
+    dzchunkindex: int = Form(...),
+    dztotalchunkcount: int = Form(...),
+    dzchunkbyteoffset: int = Form(...),
+    dztotalfilesize: int = Form(...),
+    dzchunksize: int = Form(...),
+):
     try:
         folder = jwt.decode(
             token, settings.jwt_secret.get_secret_value(), algorithms=["HS256"]
@@ -102,7 +112,7 @@ async def save_file(upload_file: UploadFile, folder: str) -> None:
     elif settings.local_path:
         dest = Path(settings.local_path) / folder
         dest.mkdir(parents=True, exist_ok=True)
-        async with aiofiles.open(dest / upload_file.filename, "wb") as f:
+        async with aiofiles.open(dest / upload_file.filename, "ab") as f:
             while True:
                 data = await upload_file.read(10 * 2 ** 20)
                 if not data:
