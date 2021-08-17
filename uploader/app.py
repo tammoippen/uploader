@@ -14,30 +14,60 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from functools import lru_cache
+import mimetypes
 import os
 from pathlib import Path
+import re
 import secrets
-from time import sleep, time
+import shutil
+from time import time
+from typing import Any, Optional
 
 import aiofiles
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Request
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 import jwt
 from loguru import logger
-from pydantic.types import UUID4
-from starlette.requests import Request
+import pydantic as pyd
 from starlette.responses import PlainTextResponse
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
-from ._gcs import upload_gcs
-from ._settings import Settings
+class GCSPath(pyd.ConstrainedStr):
+    regex = re.compile(r"gs://[^/]+/.*")
+
+
+class Settings(pyd.BaseSettings):
+    jwt_secret: pyd.SecretStr = pyd.SecretStr(secrets.token_urlsafe(16))
+    admin_secret: pyd.SecretStr
+    local_path: Optional[str] = None
+    temp_path: Path = Path("/tmp")
+    gcs_path: Optional[GCSPath] = None
+
+    class Config:
+        case_sensitive = False
+        env_prefix = "UPLDR_"
+
+    @classmethod
+    @lru_cache
+    def get(cls) -> "Settings":
+        return cls()
+
 
 app = FastAPI()
 app.mount("/static", StaticFiles(packages=["uploader"]), name="static")
 templates = Jinja2Templates(
     directory=f"{os.path.dirname(os.path.realpath(__file__))}/templates"
 )
-settings = Settings()
 
 
 @app.get("/")
@@ -56,6 +86,7 @@ async def post_token(
     password: str = Form(...),
     duration: int = Form(...),
     folder: str = Form(...),
+    settings: Settings = Depends(Settings.get),
 ):
     if secrets.compare_digest(password, settings.admin_secret.get_secret_value()):
         token = jwt.encode(
@@ -76,16 +107,102 @@ async def get_upload(request: Request, token: str):
     )
 
 
+async def save_chunk(
+    file: UploadFile,
+    dzuuid: pyd.UUID4,
+    dzchunkindex: int,
+    dztotalchunkcount: int,
+    settings: Settings,
+) -> bool:
+    logger.debug("Store chunk:", file.filename, dzuuid, dzchunkindex, dztotalchunkcount)
+    dest = settings.temp_path / "uploader" / str(dzuuid)
+    dest.mkdir(parents=True, exist_ok=True)
+    chars = len(str(dztotalchunkcount))
+    async with aiofiles.open(dest / f"{dzchunkindex:0{chars}d}.part", "wb") as f:
+        while True:
+            data = await file.read(4096)
+            if not data:
+                break
+            await f.write(data)
+    if dzchunkindex == dztotalchunkcount - 1:
+        async with aiofiles.open(dest / file.filename, "wb") as out_f:
+            for i in range(dztotalchunkcount):
+                async with aiofiles.open(dest / f"{i:0{chars}d}.part", "rb") as in_f:
+                    await out_f.write(await in_f.read())
+        return True
+    return False
+
+
+async def save_local_file(
+    filename: str, folder: str, dzuuid: pyd.UUID4, settings: Settings
+) -> None:
+    src = settings.temp_path / "uploader" / str(dzuuid)
+    dest = Path(settings.local_path) / folder
+    dest.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src / filename, dest / filename)
+    shutil.rmtree(src)
+
+
+try:
+    from google.cloud import storage
+
+    def get_bucket(settings: Settings = Depends(Settings.get)) -> storage.Bucket:
+        parts = settings.gcs_path.split("/")
+        bucket_name = parts[2]
+        client = storage.Client()
+        return client.bucket(bucket_name)
+
+    async def upload_gcs(
+        filename: str,
+        folder: str,
+        dzuuid: pyd.UUID4,
+        bucket: storage.Bucket,
+        settings: Settings,
+    ) -> None:
+        parts = settings.gcs_path.split("/")
+        path = "/".join(parts[3:] + [folder, filename])
+        blob = bucket.blob(path)
+        src = settings.temp_path / "uploader" / str(dzuuid)
+        logger.debug(f"Uploading {src / filename} to gs://{bucket.name}/{path} ... ")
+        with open(src / filename, "rb") as f:
+            blob.upload_from_file(
+                f, content_type=mimetypes.guess_type(src / filename)[0]
+            )
+        logger.debug(
+            f"Uploading {src / filename} to gs://{bucket.name}/{path} ... Done"
+        )
+        shutil.rmtree(src)
+
+
+except ImportError:
+
+    def get_bucket(settings: Settings = Depends(Settings.get)) -> Any:
+        return None
+
+    async def upload_gcs(
+        upload_file: UploadFile,
+        folder: str,
+        dzuuid: pyd.UUID4,
+        bucket: Any,
+        settings: Settings,
+    ) -> None:
+        raise NotImplementedError()
+
+
 @app.post("/upload")
-async def post_upload(*,
+async def post_upload(
+    *,
     file: UploadFile = File(...),
     token: str = Form(...),
-    dzuuid: UUID4 = Form(...),
+    dzuuid: pyd.UUID4 = Form(...),
     dzchunkindex: int = Form(...),
     dztotalchunkcount: int = Form(...),
-    dzchunkbyteoffset: int = Form(...),
-    dztotalfilesize: int = Form(...),
-    dzchunksize: int = Form(...),
+    # dzchunkbyteoffset: int = Form(...),
+    # dztotalfilesize: int = Form(...),
+    # dzchunksize: int = Form(...),
+    background_tasks: BackgroundTasks,
+    settings: Settings = Depends(Settings.get),
+    bucket: Any = Depends(get_bucket),
 ):
     try:
         folder = jwt.decode(
@@ -99,22 +216,14 @@ async def post_upload(*,
             status_code=400, detail="Something is wrong with your token."
         )
     try:
-        await save_file(file, folder)
+        if await save_chunk(file, dzuuid, dzchunkindex, dztotalchunkcount, settings):
+            if settings.gcs_path:
+                background_tasks.add_task(
+                    upload_gcs, file.filename, folder, dzuuid, bucket, settings
+                )
+            elif settings.local_path:
+                await save_local_file(file.filename, folder, dzuuid, settings)
     except Exception:
         logger.exception("Some error while saving:")
         raise HTTPException(status_code=500, detail="Cannot save the file.")
     return PlainTextResponse(status_code=204)
-
-
-async def save_file(upload_file: UploadFile, folder: str) -> None:
-    if settings.gcs_path:
-        await upload_gcs(upload_file, folder, settings)
-    elif settings.local_path:
-        dest = Path(settings.local_path) / folder
-        dest.mkdir(parents=True, exist_ok=True)
-        async with aiofiles.open(dest / upload_file.filename, "ab") as f:
-            while True:
-                data = await upload_file.read(10 * 2 ** 20)
-                if not data:
-                    break
-                await f.write(data)
