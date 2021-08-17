@@ -1,31 +1,16 @@
 {% extends "base.html" %}
 {% block title %} File Uploder {% endblock %}
-{% block head %}
-    {{ super() }}
-{% endblock %}
 {% block body %}
 
-<section class="section">
-    <div class="container">
-        <h1 class="title">File uploader</h1>
-        <div class="field">
-            <label class="label">Provide your token:</label>
-            <div class="control">
-                <input class="input" type="text" name="token" id="token">
-            </div>
+<div class="container">
+    <h1>File uploader</h1>
+    <form action="" onsubmit="goToUpload(event)">
+        <label for="token">Provide your token:</label>
+        <input type="text" name="token" id="token" placeholder="Token" required />
+        <div class="text-right">
+            <button type="submit">Go to uploading...</button>
         </div>
-        <div class="control has-text-right">
-            <button onclick="goToUpload()" class="button is-link">Go to uploading...</button>
-        </div>
-    </div>
-</section>
-
-<script>
-const input = document.getElementById('token');
-
-function goToUpload() {
-    window.location = `/upload?token=${input.value}`
-}
-</script>
+    </form>
+</div>
 
 {% endblock %}

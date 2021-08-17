@@ -1,0 +1,6 @@
+@import "primitive.css";
+
+pre {
+    overflow: auto;
+    background: #f8f8f8;
+}
