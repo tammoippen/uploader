@@ -37,6 +37,10 @@ def _parse_access_log(
 ) -> Mapping[str, Any]:
     if event_dict["logger"] == "hypercorn.access":
         al = json.loads(event_dict["event"])
+        try:
+            al["responseSize"] = int(al["responseSize"])
+        except ValueError:
+            al["responseSize"] = 0
         event_dict["httpRequest"] = al
         event_dict[
             "event"

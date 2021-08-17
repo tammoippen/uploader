@@ -23,7 +23,7 @@ access_log_format = (
     '{"status_line": "%(r)s", "remoteIp": "%(h)s", "requestMethod": "%(m)s", '
     '"protocol": "%(S)s/%(H)s", "path": "%(U)s", '
     '"query": "%(q)s", "status": %(s)i, '
-    '"status_phrase": "%(st)s", "responseSize": %(B)s, '
+    '"status_phrase": "%(st)s", "responseSize": "%(B)s", '
     '"latency": "%(L)s", "origin": "%({origin}i)s", '
     '"referer": "%(f)s", "userAgent": "%(a)s", '
     '"host": "%({host}i)s"}'
