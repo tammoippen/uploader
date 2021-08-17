@@ -36,12 +36,12 @@ from fastapi import (
     Response,
     UploadFile,
 )
+from fastapi.responses import PlainTextResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 import jwt
-from loguru import logger
 import pydantic as pyd
-from starlette.responses import PlainTextResponse
-from starlette.staticfiles import StaticFiles
-from starlette.templating import Jinja2Templates
+import structlog
 
 
 class GCSPath(pyd.ConstrainedStr):
@@ -70,6 +70,7 @@ app.mount("/static", StaticFiles(packages=["uploader"]), name="static")
 templates = Jinja2Templates(
     directory=f"{os.path.dirname(os.path.realpath(__file__))}/templates"
 )
+logger = structlog.get_logger("uploader")
 
 
 @app.get("/")
