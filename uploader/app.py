@@ -33,6 +33,7 @@ from fastapi import (
     Form,
     HTTPException,
     Request,
+    Response,
     UploadFile,
 )
 import jwt
@@ -42,6 +43,7 @@ from starlette.responses import PlainTextResponse
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
+
 class GCSPath(pyd.ConstrainedStr):
     regex = re.compile(r"gs://[^/]+/.*")
 
@@ -49,7 +51,7 @@ class GCSPath(pyd.ConstrainedStr):
 class Settings(pyd.BaseSettings):
     jwt_secret: pyd.SecretStr = pyd.SecretStr(secrets.token_urlsafe(16))
     admin_secret: pyd.SecretStr
-    local_path: Optional[str] = None
+    local_path: Optional[Path] = None
     temp_path: Path = Path("/tmp")
     gcs_path: Optional[GCSPath] = None
 
@@ -71,12 +73,12 @@ templates = Jinja2Templates(
 
 
 @app.get("/")
-async def index(request: Request):
+async def index(request: Request) -> Response:
     return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.get("/token")
-async def get_token(request: Request):
+async def get_token(request: Request) -> Response:
     return templates.TemplateResponse("get_token.html", {"request": request})
 
 
@@ -87,7 +89,7 @@ async def post_token(
     duration: int = Form(...),
     folder: str = Form(...),
     settings: Settings = Depends(Settings.get),
-):
+) -> Response:
     if secrets.compare_digest(password, settings.admin_secret.get_secret_value()):
         token = jwt.encode(
             {"exp": round(time()) + duration, "folder": folder},
@@ -101,7 +103,7 @@ async def post_token(
 
 
 @app.get("/upload")
-async def get_upload(request: Request, token: str):
+async def get_upload(request: Request, token: str) -> Response:
     return templates.TemplateResponse(
         "upload.html", {"request": request, "token": token}
     )
@@ -123,6 +125,7 @@ async def save_chunk(
             data = await file.read(4096)
             if not data:
                 break
+            assert isinstance(data, bytes)
             await f.write(data)
     if dzchunkindex == dztotalchunkcount - 1:
         async with aiofiles.open(dest / file.filename, "wb") as out_f:
@@ -136,8 +139,11 @@ async def save_chunk(
 async def save_local_file(
     filename: str, folder: str, dzuuid: pyd.UUID4, settings: Settings
 ) -> None:
+    assert settings.local_path
+    assert folder
+    assert filename
     src = settings.temp_path / "uploader" / str(dzuuid)
-    dest = Path(settings.local_path) / folder
+    dest = settings.local_path / folder
     dest.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src / filename, dest / filename)
     shutil.rmtree(src)
@@ -146,7 +152,8 @@ async def save_local_file(
 try:
     from google.cloud import storage
 
-    def get_bucket(settings: Settings = Depends(Settings.get)) -> storage.Bucket:
+    def get_bucket(settings: Settings = Depends(Settings.get)) -> Any:
+        assert settings.gcs_path
         parts = settings.gcs_path.split("/")
         bucket_name = parts[2]
         client = storage.Client()
@@ -156,9 +163,11 @@ try:
         filename: str,
         folder: str,
         dzuuid: pyd.UUID4,
-        bucket: storage.Bucket,
+        bucket: Any,
         settings: Settings,
     ) -> None:
+        assert settings.gcs_path
+        assert isinstance(bucket, storage.Bucket)
         parts = settings.gcs_path.split("/")
         path = "/".join(parts[3:] + [folder, filename])
         blob = bucket.blob(path)
@@ -180,7 +189,7 @@ except ImportError:
         return None
 
     async def upload_gcs(
-        upload_file: UploadFile,
+        filename: str,
         folder: str,
         dzuuid: pyd.UUID4,
         bucket: Any,
@@ -203,7 +212,7 @@ async def post_upload(
     background_tasks: BackgroundTasks,
     settings: Settings = Depends(Settings.get),
     bucket: Any = Depends(get_bucket),
-):
+) -> PlainTextResponse:
     try:
         folder = jwt.decode(
             token, settings.jwt_secret.get_secret_value(), algorithms=["HS256"]

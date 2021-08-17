@@ -20,5 +20,6 @@ format:
 	poetry run black .
 
 static:
-	poetry run flake8
+	poetry run flake8 uploader
+	poetry run mypy uploader
 	poetry run black --check .
