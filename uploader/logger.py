@@ -1,3 +1,4 @@
+from functools import partial
 import inspect
 import json
 import os
@@ -36,17 +37,43 @@ def _parse_access_log(
 ) -> Mapping[str, Any]:
     if event_dict["logger"] == "hypercorn.access":
         al = json.loads(event_dict["event"])
-        event_dict["http_request"] = al
+        event_dict["httpRequest"] = al
         event_dict[
             "event"
-        ] = f'"{al.pop("status_line")}" {al["status_code"]} {al["status_phrase"]}'
+        ] = f'"{al.pop("status_line")}" {al["status"]} {al["status_phrase"]}'
+
+    return event_dict
+
+
+def google_stackdriver(
+    is_json: bool, _: Any, __: str, event_dict: MutableMapping[str, Any]
+) -> Mapping[str, Any]:
+    if not is_json:
+        return event_dict
+    # Stackdrive requires certain fields to be set.
+    # see https://cloud.google.com/logging/docs/agent/configuration#process-payload
+    event_dict["severity"] = event_dict.pop("level")
+    event_dict["message"] = event_dict.pop("event")
+
+    # Stackdriver parses the exception in `message`, see https://cloud.google.com/error-reporting/docs/formatting-error-messages
+    if event_dict.get("exception"):
+        event_dict["message"] = f"{event_dict['message']}\n{event_dict['exception']}"
+    event_dict.pop("exception", None)
+
+    event_dict["time"] = event_dict.pop("timestamp")
+    event_dict["logging.googleapis.com/sourceLocation"] = {
+        "file": event_dict.pop("pathname"),
+        "line": event_dict.pop("lineno"),
+        "function": event_dict.pop("funcName"),
+    }
 
     return event_dict
 
 
 def configure_logging(log_level: str = "DEBUG") -> dict[str, Any]:
     renderer: Union[JSONRenderer, ConsoleRenderer]
-    if not os.isatty(sys.stdout.fileno()):
+    is_json = not os.isatty(sys.stdout.fileno())
+    if is_json:
         renderer = JSONRenderer()
     else:
         renderer = ConsoleRenderer(colors=True)
@@ -61,6 +88,7 @@ def configure_logging(log_level: str = "DEBUG") -> dict[str, Any]:
             structlog.processors.format_exc_info,
             structlog.processors.TimeStamper("iso"),
             structlog.processors.UnicodeDecoder(),
+            partial(google_stackdriver, is_json),
             renderer,
         ],
         context_class=dict,
@@ -76,7 +104,7 @@ def configure_logging(log_level: str = "DEBUG") -> dict[str, Any]:
         _parse_access_log,
         structlog.processors.format_exc_info,
         structlog.processors.TimeStamper("iso"),
-        structlog.contextvars.merge_contextvars,
+        partial(google_stackdriver, is_json),
     ]
 
     return {

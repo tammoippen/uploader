@@ -20,11 +20,11 @@ logging.config.dictConfig(logconfig_dict)
 bind = [f"{os.environ.get('HOST', '0.0.0.0')}:{os.environ.get('PORT', '80')}"]
 accesslog = "-"
 access_log_format = (
-    '{"status_line": "%(r)s", "remote_address": "%(h)s", "method": "%(m)s", '
-    '"scheme": "%(S)s", "protocol": "%(H)s", "path": "%(U)s", '
-    '"query": "%(q)s", "status_code": %(s)i, '
-    '"status_phrase": "%(st)s", "response_length": %(B)s, '
-    '"latency_sec": %(T)i, "latency_microsec": %(D)i, "origin": "%({origin}i)s", '
-    '"referer": "%(f)s", "user_agent": "%(a)s", '
+    '{"status_line": "%(r)s", "remoteIp": "%(h)s", "requestMethod": "%(m)s", '
+    '"protocol": "%(S)s/%(H)s", "path": "%(U)s", '
+    '"query": "%(q)s", "status": %(s)i, '
+    '"status_phrase": "%(st)s", "responseSize": %(B)s, '
+    '"latency": "%(L)s", "origin": "%({origin}i)s", '
+    '"referer": "%(f)s", "userAgent": "%(a)s", '
     '"host": "%({host}i)s"}'
 )
